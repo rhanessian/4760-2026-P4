@@ -7,19 +7,20 @@
 
 int main (int argc, char *argv[]){
 // Check for necessary arguments	
-	if (argc < 3) {
-		fprintf(stderr, "Worker missing arguments.\n");
+	if (argc < 4) {
+		fprintf(stderr, "Worker: missing arguments.\n");
 		exit(EXIT_FAILURE);
 	}
 	
 // Initialize time and pid variables
 	int durationS = atoi(argv[1]);
 	int durationN = atoi(argv[2]);
+	int processIndex = atoi(argv[3]);
 	pid_t pid = getpid();
 	pid_t ppid = getppid();
 	
 	fprintf(stderr, "\nWorker starting, PID: %d  PPID: %d\n", pid, ppid);
-	fprintf(stderr, "Called with:\n\tProcess Time: %d seconds, %d nanoseconds\n\n", durationS, durationN);
+	fprintf(stderr, "Called with:\n\tProcess Time: %d seconds, %d nanoseconds\n\tIndex: %d\n\n", durationS, durationN, processIndex);
 
 // Attach to shared memory simulated clock
 	key_t ossKey = ftok("oss.c", 'c');
@@ -33,15 +34,6 @@ int main (int argc, char *argv[]){
 	if (shm == (void *)-1) {
 		perror("Worker: shmat failed.\n");
 		exit(EXIT_FAILURE);
-	}
-	
-// Calculate termination time	
-	long long termSeconds = shm->seconds + durationS;
-	long long termNano = shm->nanoseconds + durationN;
-	
-	if (termNano >= 1000000000) {
-		termSeconds += (termNano / 1000000000);
-		termNano %= 1000000000;
 	}
 	
 // Attach to message queue	
@@ -65,12 +57,12 @@ int main (int argc, char *argv[]){
 	int active = 1;
 	
 	fprintf(stderr, "WORKER PID: %d PPID: %d ", pid, ppid);
-	fprintf(stderr, "SysClockS: %lld SysClockNano: %lld\nTermTimeS: %lld TermTimeNano: %lld\n", shm->seconds, shm->nanoseconds, termSeconds, termNano);
+//	fprintf(stderr, "SysClockS: %lld SysClockNano: %lld\nTermTimeS: %lld TermTimeNano: %lld\n", shm->ossClock.seconds, shm->ossClock.nanoseconds, termSeconds, termNano);
 	fprintf(stderr, "--Just Starting\n\n");
 	
 // Main loop	
 	while (active) {
-// Blocking wait 
+// Receive message from oss, increment count 
 		if (msgrcv(msqid, &ossBuf, sizeof(ossBuf) - sizeof(long), pid, 0) == -1) {
 			break;
 		}	
@@ -80,19 +72,33 @@ int main (int argc, char *argv[]){
 			}
 		}
 		
-// Check simulated clock vs termination time
-		if (shm->seconds > termSeconds || (shm->seconds == termSeconds && shm->nanoseconds >= termNano)) {
-			active = 0;
-			workerBuf.status = 0; 
-		} else {
-			fprintf(stderr, "WORKER PID: %d PPID: %d ", pid, ppid);
-			fprintf(stderr, "SysClockS: %lld SysClockNano: %lld\nTermTimeS: %lld TermTimeNano: %lld\n", shm->seconds, shm->nanoseconds, termSeconds, termNano);	
-			fprintf(stderr, "--%d messages received from OSS.\n", messageCount);
+// Check remaining time and termination
+		int remainingTime = shm->table[processIndex].remainingTime;
+		long long value = remainingTime - ossBuf.quantumNano;
+		int elapsedTime = 0;
+		if (value =< 0) {
+			elapsedTime = -remainingTime;
+		}
+	
+// Decide whether or not to be blocked
+		int blockedChance = rand() % 100;
+		int toBlock = 0;
+		long long nanoTime = (durationS * 1000000000LL) + durationN;
+		long long blockedTime = 0;
+		if (blockedChance < 20) {
+			toBlock = 1;
+		}
 
-			workerBuf.status = 1;
+// Choose time to run before interruption
+		if ((value > 0 ) && toBlock) {
+			blockedStartTime = rand() % (ossBuf.quantumNano-1);
+			elapsedTime = blockedStartTime;
+		} else if ((value > 0) && !toBlock) {
+			elapsedTime = ossBuf.quantumNano;
 		}
 		
 // Send message back to oss
+		workerBuf.usedNanoTime = elapsedTime;
 		workerBuf.mtype = ppid;
 		workerBuf.intData = pid;
 		if (msgsnd(msqid, &workerBuf, sizeof(workerBuf) - sizeof(long), 0) == -1) {
@@ -100,11 +106,11 @@ int main (int argc, char *argv[]){
 			exit(EXIT_FAILURE);
 		}
 	}
-
+/*
 	fprintf(stderr, "WORKER PID: %d PPID: %d ", pid, ppid);
 	fprintf(stderr, "SysClockS: %lld SysClockNano: %lld\nTermTimeS: %lld TermTimeNano: %lld\n", shm->seconds, shm->nanoseconds, termSeconds, termNano);
 	fprintf(stderr, "--Terminating after sending next message.\n%d messages received from OSS.\n", messageCount);	
-	
+*/	
 	shmdt(shm);
 	return 0;
 }
