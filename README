@@ -22,15 +22,3 @@ Generative AI:
 	it identified an inconsistency in the int value used for the state attribute in the PCB 
 	table, which had been confusing the scheduler. After implementing the fixes it suggested, 
 	the program ran as it should.
-	
-	
-	Similar to my submission for project 2, I did not directly prompt a generative AI model
-	to create my program. I used Google Gemini to debug particular sections of code that
-	were not operating as I had expected. For example, the function I wrote to calculate the
-	next worker process to send a message to was not working. The OSS was sending thousands of
-	messages to one worker until that worker terminated, then moved to the next without 
-	alternating between workers. Gemini found the bug to be that the current index (for the
-	process in the process table) was resetting to zero instead of holding on to the value
-	until the next call to this function. In this way, Gemini is useful. However, it struggles
-	to maintain an accurate log of previous questions/prompts and therefore everything it
-	outputs has to be checked against the project's actual constraints.
