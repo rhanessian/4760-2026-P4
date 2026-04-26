@@ -1,1 +1,36 @@
-# 4760-2026-P4
+4760-2026-P4
+Name: Rebecca Hanessian
+Date: 4/9/2026
+Environment: macOS (Unix style)
+How to compile the project:
+	Type 'make'
+Example of how to run the project:
+	oss [-h] [-n proc] [-s simul] [-t timelimitForChildren] [-i intervalToLaunchInSeconds] [-f logfile] 
+Generative AI: 
+	For this project, I utilized Gemini initially, and then Codex to finalize. Using 
+	project 3 as a skeleton, I altered and added the basic functionality required for project
+	4. There were a couple changes for which I used Gemini to figure out implementation, such as 
+	how to create a circular queue. After developing a project that compiled and ran, I 
+	continued using Gemini to debug anything in the output that showed errors in the logic
+	of the code. Gemini provided useful information but it could not identify why the blocked
+	queue remained empty. Gemini only provided "ideas" of what could be wrong instead of being
+	able to identify logical errors in the coding itself. After nearly countless attempts
+	to find the error in the blocking logic, I utilized Codex, which proved much more useful.
+	In debugging the two source files and the header file, it identified an overflow error
+	from switching between int and long long variables, and more consequentially, an extra 
+	clock increment in the function for handling the workers' response messages. As well,
+	it identified an inconsistency in the int value used for the state attribute in the PCB 
+	table, which had been confusing the scheduler. After implementing the fixes it suggested, 
+	the program ran as it should.
+	
+	
+	Similar to my submission for project 2, I did not directly prompt a generative AI model
+	to create my program. I used Google Gemini to debug particular sections of code that
+	were not operating as I had expected. For example, the function I wrote to calculate the
+	next worker process to send a message to was not working. The OSS was sending thousands of
+	messages to one worker until that worker terminated, then moved to the next without 
+	alternating between workers. Gemini found the bug to be that the current index (for the
+	process in the process table) was resetting to zero instead of holding on to the value
+	until the next call to this function. In this way, Gemini is useful. However, it struggles
+	to maintain an accurate log of previous questions/prompts and therefore everything it
+	outputs has to be checked against the project's actual constraints.

@@ -19,6 +19,8 @@ int main (int argc, char *argv[]){
 	pid_t pid = getpid();
 	pid_t ppid = getppid();
 	
+	srand(getpid());
+	
 	fprintf(stderr, "\nWorker starting, PID: %d  PPID: %d\n", pid, ppid);
 	fprintf(stderr, "Called with:\n\tProcess Time: %d seconds, %d nanoseconds\n\tIndex: %d\n\n", durationS, durationN, processIndex);
 
@@ -37,7 +39,6 @@ int main (int argc, char *argv[]){
 	}
 	
 // Attach to message queue	
-	int messageCount = 0;
 	struct msgbufWorker workerBuf;
 	struct msgbufOSS ossBuf;
 	workerBuf.mtype = 1;
@@ -57,50 +58,37 @@ int main (int argc, char *argv[]){
 	int active = 1;
 	
 	fprintf(stderr, "WORKER PID: %d PPID: %d ", pid, ppid);
-//	fprintf(stderr, "SysClockS: %lld SysClockNano: %lld\nTermTimeS: %lld TermTimeNano: %lld\n", shm->ossClock.seconds, shm->ossClock.nanoseconds, termSeconds, termNano);
 	fprintf(stderr, "--Just Starting\n\n");
 	
 // Main loop	
 	while (active) {
 // Receive message from oss, increment count 
-		if (msgrcv(msqid, &ossBuf, sizeof(ossBuf) - sizeof(long), pid, 0) == -1) {
+		if (msgrcv(msqid, &ossBuf, sizeof(ossBuf) - sizeof(long), processIndex + 1, 0) == -1) {
 			break;
 		}	
-		for (int i = 0; i < MAXPROC; i++) {
-			if (shm->table[i].pid == getpid()) {
-				(shm->table[i].msgsSent)++;
-			}
-		}
 		
 // Check remaining time and termination
-		int remainingTime = shm->table[processIndex].remainingTime;
+		long long remainingTime = shm->table[processIndex].remainingNano;
 		long long value = remainingTime - ossBuf.quantumNano;
-		int elapsedTime = 0;
-		if (value =< 0) {
+		long long elapsedTime = 0;
+		if (value <= 0) {
 			elapsedTime = -remainingTime;
-		}
-	
-// Decide whether or not to be blocked
-		int blockedChance = rand() % 100;
-		int toBlock = 0;
-		long long nanoTime = (durationS * 1000000000LL) + durationN;
-		long long blockedTime = 0;
-		if (blockedChance < 20) {
-			toBlock = 1;
-		}
-
-// Choose time to run before interruption
-		if ((value > 0 ) && toBlock) {
-			blockedStartTime = rand() % (ossBuf.quantumNano-1);
-			elapsedTime = blockedStartTime;
-		} else if ((value > 0) && !toBlock) {
-			elapsedTime = ossBuf.quantumNano;
+			active = 0;
+		} else {
+		
+// Decide whether to block and when
+			if (rand() % 100 < 20) {
+				elapsedTime = (rand() % (ossBuf.quantumNano / 2)) + 1;
+			} else {
+				elapsedTime = ossBuf.quantumNano; 
+			}
 		}
 		
 // Send message back to oss
 		workerBuf.usedNanoTime = elapsedTime;
-		workerBuf.mtype = ppid;
+		workerBuf.mtype = 555;
 		workerBuf.intData = pid;
+		workerBuf.pcbIndex = processIndex;
 		if (msgsnd(msqid, &workerBuf, sizeof(workerBuf) - sizeof(long), 0) == -1) {
 			perror("Worker: msgsnd to OSS failed.\n");
 			exit(EXIT_FAILURE);
@@ -114,8 +102,6 @@ int main (int argc, char *argv[]){
 	shmdt(shm);
 	return 0;
 }
-
-
 
 
 
